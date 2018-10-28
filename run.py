@@ -4,6 +4,7 @@ import subprocess
 import yaml
 import pickle
 import pandas as pd
+import itertools
 
 """
 Script to reproduce semantic neural augmentation experiments
@@ -11,9 +12,9 @@ Script to reproduce semantic neural augmentation experiments
 # settable parameters
 ############################################################
 # folder to run experiments in
-run_dir = ""
+run_dir = "/media/npittaras/B47E380F7E37C8BE/Data/nle/preliminary_exps"
 # folder where run scripts are
-sources_dir = ""
+sources_dir = "/home/npittaras/Documents/project/nle-special/nlp-semantic-augmentation/"
 # virtualenv folder
 venv_dir = ""
 # results csv file
@@ -25,8 +26,8 @@ run_types = ["run", "majority"]
 
 # preliminary experiment params
 mlp_params = {
-    "hidden_size": [],
-    "num_layers": []
+    "hidden_size": [256, 512],
+    "num_layers": [1, 2]
     }
 lstm_params = {
     "hidden_size": [256, 512, 1024, 2048],
@@ -34,6 +35,17 @@ lstm_params = {
    }
 
 #########################################################
+
+def make_configs(variables, variable_names, baseconf):
+    conf = baseconf.copy()
+    for params in itertools.product:
+        for p, param in enumerate(params):
+            lconf = baseconf
+            for name in variable_names[p][:-1]:
+                lconf = lconf[name]
+            lconf[variable_names[-1]] = param
+        print(lconf)
+
 
 results = {}
 
@@ -46,7 +58,8 @@ if not exists(run_dir):
     makedirs(run_dir)
 
 # preliminary experiments on network architectures
-conf = {
+configs = []
+common_conf = {
     "dataset": {"name" : "20newsgroups"},
     "embedding": {"name": "glove", "dimension": 50},
     "train": {"epochs": 50, "folds": 5, "batch_size": 50},
@@ -54,8 +67,24 @@ conf = {
     "log_level": "info",
       }
 
+hidden_size = [256, 512, 1024, 2048]
+num_layers = [1, 2, 3, 4]
+names = [["learner", "hidden_dim"], ["learner", "layers"]]
+mlp_conf = common_conf.copy()
+mlp_conf["learner"] = {"name":"mlp"}
+mlp_conf["embedding"] = {"aggregation":"avg"}
+
+configs.extend(make_configs([hidden_size, num_layers], names, mlp_conf))
+
+
+configs.extend(mp_conf)
+lstm_conf = common_conf.copy()
+lstm_conf["learner"] = {"name":"mlp"}
+lstm_conf["embedding"] = {"aggregation":["pad", 10, "first"]}
+configs.append(lstm_conf) 
+
 # prelim experiments
-for name, network in zip(["mlp", "lstm"],[mlp_params, lstm_params]):
+for name, network in zip(["lstm", "mlp"],[lstm_params, mlp_params]):
     print("Running experimens for {} learner".format(name))
     for lsize in network["hidden_size"]:
         for nl in network["num_layers"]:
@@ -84,14 +113,15 @@ for name, network in zip(["mlp", "lstm"],[mlp_params, lstm_params]):
                 # write the run script file
                 script_path = join(experiment_dir, "run.sh")
                 with open(script_path, "w") as f:
-
                     if venv_dir:
                         f.write("source \"{}/bin/activate\"".format(venv_dir))
 
                     f.write("cd \"{}\"\n".format(sources_dir))
-                    f.write("python3 \"{}\" --config_file \"{}\" && touch '{}' &&  exit 0".format(join(sources_dir, "main.py"), conf_path, completed_file))
-                    f.write("touch '{}' && exit 1".format(errorfile))
+                    f.write("python3 \"{}\" --config_file \"{}\" && touch \"{}\" &&  exit 0\n".format(join(sources_dir, "main.py"), conf_path, completed_file))
+                    f.write("touch '{}' && exit 1\n".format(error_file))
                 subprocess.run(["/usr/bin/env", "bash", script_path])
+                if exists(error_file):
+                    exit(1)
             # read experiment results
             res_file = join(experiment_dir,"results", run_id, "results.pickle")
             with open(res_file, "rb") as f:
