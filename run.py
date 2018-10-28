@@ -11,37 +11,28 @@ Script to reproduce semantic neural augmentation experiments
 # settable parameters
 ############################################################
 # folder to run experiments in
-run_dir = "/home/nik/work/iit/submissions/NLE-special/experiments/test/"
+run_dir = ""
 # folder where run scripts are
-sources_dir = "/home/nik/work/iit/submissions/NLE-special/code/"
+sources_dir = ""
 # virtualenv folder
 venv_dir = ""
 # results csv file
-results_file = "results.csv"
+results_file = "results_network_prelim.csv"
 # evaluation measures
 eval_measures = ["f1-score"]
 aggr_measures = ["macro", "micro"]
 run_types = ["run", "majority"]
 
 # preliminary experiment params
-# mlp_params = {
-#     "hidden_size": [256, 512, 1024, 2048, 4096],
-#     "num_layers": [1, 2, 3, 4]
-#     }
-# lstm_params = {
-#     "hidden_size": [256, 512, 1024, 2048, 4096],
-#     "num_layers": [1, 2, 3, 4]
-#    }
-
-
 mlp_params = {
-    "hidden_size": [256, 512],
-    "num_layers": [1, 2]
-    }
-lstm_params = {
     "hidden_size": [],
     "num_layers": []
     }
+lstm_params = {
+    "hidden_size": [256, 512, 1024, 2048],
+    "num_layers": [1, 2, 3, 4]
+   }
+
 #########################################################
 
 results = {}
@@ -55,18 +46,13 @@ if not exists(run_dir):
     makedirs(run_dir)
 
 # preliminary experiments on network architectures
-conf = {"dataset": "20newsgroups",
-        "embedding": "glove,50",
-        "aggregation": "avg",
-        "train": {
-            "epochs": 50,
-            "folds": 3,
-            "batch_size": 50
-        },
-        "log_level": "info",
-        "options":{"data_limit": 100},
-        "serialization_dir": join(sources_dir, "serializations_prelim")
-}
+conf = {
+    "dataset": {"name" : "20newsgroups"},
+    "embedding": {"name": "glove", "dimension": 50},
+    "train": {"epochs": 50, "folds": 5, "batch_size": 50},
+    "folders": {"serialization": join(sources_dir, "serialization"), "embeddings": "embeddings"},
+    "log_level": "info",
+      }
 
 # prelim experiments
 for name, network in zip(["mlp", "lstm"],[mlp_params, lstm_params]):
@@ -77,6 +63,7 @@ for name, network in zip(["mlp", "lstm"],[mlp_params, lstm_params]):
             run_id = "{}_{}_{}".format(name, lsize, nl)
             experiment_dir = join(run_dir, run_id)
             completed_file = join(experiment_dir, "completed")
+            error_file = join(experiment_dir, "error")
 
             if exists(completed_file):
                 print("Skipping completed experiment {}".format(run_id))
@@ -84,9 +71,13 @@ for name, network in zip(["mlp", "lstm"],[mlp_params, lstm_params]):
                 makedirs(experiment_dir, exist_ok=True)
                 # amend the configuration file
                 conf["run_id"] = run_id
-                conf["learner"] = "mlp,{},{}".format(lsize, nl)
-                conf["log_dir"] = join(experiment_dir, "logs")
-                conf["results_folder"] = join(experiment_dir, "results")
+                heads = ["name", "hidden_dim", "layers", "sequence_length"]
+                conf["learner"] =  {n:x for (n,x) in zip(heads, [name, lsize, nl, 10] )} 
+
+                conf["folders"]["logs"] = join(experiment_dir, "logs")
+                conf["folders"]["results"] = join(experiment_dir, "results")
+                conf["embedding"]["aggregation"] =  "avg" if name == "mlp" else "pad,10,first"
+
                 conf_path = join(experiment_dir, "config.yml")
                 with open(conf_path, "w") as f:
                     yaml.dump(conf, f)
@@ -98,9 +89,9 @@ for name, network in zip(["mlp", "lstm"],[mlp_params, lstm_params]):
                         f.write("source \"{}/bin/activate\"".format(venv_dir))
 
                     f.write("cd \"{}\"\n".format(sources_dir))
-                    f.write("python3 \"{}\" --config_file \"{}\"".format(join(sources_dir, "main.py"), conf_path))
+                    f.write("python3 \"{}\" --config_file \"{}\" && touch '{}' &&  exit 0".format(join(sources_dir, "main.py"), conf_path, completed_file))
+                    f.write("touch '{}' && exit 1".format(errorfile))
                 subprocess.run(["/usr/bin/env", "bash", script_path])
-                subprocess.run(["touch", completed_file])
             # read experiment results
             res_file = join(experiment_dir,"results", run_id, "results.pickle")
             with open(res_file, "rb") as f:
