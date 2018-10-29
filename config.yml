@@ -1,0 +1,34 @@
+params:
+  learner:
+    hidden_dim: [128, 256]
+    layers: [1,2,3]
+    name: mlp
+
+experiments:
+  run_folder: /home/nik/work/iit/submissions/NLE-special/experiments/test
+  results_file: "results_network_prelim.csv"
+  # evaluation measures evaluation:
+  measures: [f1-score]
+  aggregation: = [macro, micro]
+  run_types: = [run, majority]
+  sources_dir:  /home/nik/work/iit/submissions/NLE-special/code/
+  virtualenv:
+
+dataset:
+  name: 20newsgroups
+
+embedding:
+  aggregation: avg
+  dimension: 50
+  name: glove
+
+folders:
+  embeddings: embeddings
+  serialization: /home/nik/work/iit/submissions/NLE-special/code/serialization
+
+log_level: info
+
+train:
+  batch_size: 50
+  epochs: 50
+  folds: 5
