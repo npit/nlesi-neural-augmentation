@@ -1,4 +1,4 @@
-from os.path import join, exists
+from os.path import join, exists, isabs
 from os import makedirs
 import subprocess
 import yaml
@@ -33,13 +33,16 @@ def traverse_dict(ddict, key, prev_keys):
 def make_configs(config):
     vars = []
     params = config["params"]
-    for val in params:
+    for val in sorted(params.keys()):
         seqs = traverse_dict(params, val, [])
         vars.extend(seqs)
 
     configs, run_ids = [], []
+    vars = sorted(vars, key = lambda x : str(x[1]))
+
     values = [v[0] for v in vars]
     names =  [v[1] for v in vars]
+
     for combo in itertools.product(*values):
         conf = deepcopy(config)
         name_components = []
@@ -52,8 +55,10 @@ def make_configs(config):
                     lconf[key] = {}
                 lconf = lconf[key]
             lconf[key_chain[-1]] = value
+        run_id = "_".join(name_components)
+        conf["run_id"] = run_id
         configs.append(conf)
-        run_ids.append("_".join(name_components))
+        run_ids.append(run_id)
     return configs, run_ids
 
 # make a run id name out of a list of nested dict keys and a configuration dict
@@ -82,8 +87,6 @@ def main():
     aggr_measures = conf["experiments"]["aggregation"]
     run_types = conf["experiments"]["run_types"]
 
-    configs, run_ids = make_configs(conf)
-
     # folder to run experiments in
     run_dir = conf["experiments"]["run_folder"]
     # folder where run scripts are
@@ -92,6 +95,8 @@ def main():
     venv_dir = conf["experiments"]["venv"] if "venv" in conf["experiments"] else None
     # results csv file
     results_file = conf["experiments"]["results_file"]
+
+    configs, run_ids = make_configs(conf)
 
     results = {}
 
@@ -111,6 +116,10 @@ def main():
         experiment_dir = join(run_dir, run_id)
         completed_file = join(experiment_dir, "completed")
         error_file = join(experiment_dir, "error")
+        # results to run folders, if not specified otherwise
+        respath = conf["folders"]["results"]
+        if not isabs(respath):
+            conf["folders"]["results"] = join(experiment_dir, respath)
 
         if exists(completed_file):
             print("Skipping completed experiment {}".format(run_id))
