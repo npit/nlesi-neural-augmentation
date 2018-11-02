@@ -2,7 +2,8 @@ params:
   learner:
     hidden_dim: [128, 256, 512, 1024, 2048]
     layers: [1,2,3]
-    name: mlp
+    name: lstm
+    sequence_length: 10
 
 experiments:
   run_folder: /media/npittaras/B47E380F7E37C8BE/Data/nle/preliminary_exps/
@@ -18,9 +19,10 @@ dataset:
   name: 20newsgroups
 
 embedding:
-  aggregation: avg
+  aggregation: [pad, 10, first]
   dimension: 50
   name: glove
+  sequence_length: 10
 
 folders:
   embeddings: embeddings
