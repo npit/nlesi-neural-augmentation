@@ -12,12 +12,15 @@ from numpy import round
 """
 Script to reproduce semantic neural augmentation experiments
 """
+
+
 def aslist(x):
     if type(x) != list:
-        x=[x]
+        x = [x]
     return x
-def traverse_dict(ddict, key, prev_keys):
 
+
+def traverse_dict(ddict, key, prev_keys):
     res = []
     if key is None:
         for key in ddict:
