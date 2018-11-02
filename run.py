@@ -7,10 +7,15 @@ import pandas as pd
 from functools import reduce
 import itertools
 from copy import deepcopy
+from numpy import round
 
 """
 Script to reproduce semantic neural augmentation experiments
 """
+def aslist(x):
+    if type(x) != list:
+        x=[x]
+    return x
 def traverse_dict(ddict, key, prev_keys):
 
     res = []
@@ -30,13 +35,14 @@ def traverse_dict(ddict, key, prev_keys):
     return res
 
 
-def make_configs(config):
+def make_configs(base_config, run_dir, sources_dir):
     vars = []
-    params = config["params"]
+    params = base_config["params"]
+    base_raw_folder = base_config["folders"]["raw_data"]
+    base_serialization_folder = base_config["folders"]["serialization"]
     for val in sorted(params.keys()):
         seqs = traverse_dict(params, val, [])
         vars.extend(seqs)
-
     configs, run_ids = [], []
     vars = sorted(vars, key = lambda x : str(x[1]))
 
@@ -44,7 +50,7 @@ def make_configs(config):
     names =  [v[1] for v in vars]
 
     for combo in itertools.product(*values):
-        conf = deepcopy(config)
+        conf = deepcopy(base_config)
         name_components = []
         for v, value in enumerate(combo):
             lconf = conf
@@ -55,8 +61,17 @@ def make_configs(config):
                     lconf[key] = {}
                 lconf = lconf[key]
             lconf[key_chain[-1]] = value
+        # dirs
         run_id = "_".join(name_components)
-        conf["run_id"] = run_id
+        conf["folders"]["run"] = join(run_dir, run_id)
+        if isabs(base_serialization_folder):
+            conf["folders"]["serialization"] = base_serialization_folder
+        else:
+            conf["folders"]["serialization"] = join(sources_dir, base_serialization_folder)
+        if isabs(base_raw_folder):
+            conf["folders"]["raw_data"] = base_raw_folder
+        else:
+            conf["folders"]["raw_data"] = join(sources_dir, base_raw_folder)
         configs.append(conf)
         run_ids.append(run_id)
     return configs, run_ids
@@ -79,24 +94,29 @@ def main():
     # config file
     config_file = "config.yml"
 
+    ############################################################
 
     # set the expeirment parameters via a configuration list
     conf = yaml.load(open(config_file))
     # evaluation measures
-    eval_measures = conf["experiments"]["measures"]
-    aggr_measures = conf["experiments"]["aggregation"]
-    run_types = conf["experiments"]["run_types"]
+    exps = conf["experiments"]
+    eval_measures = aslist(exps["measures"]) if "measures" in exps else ["f1-score", "accuracy"]
+    aggr_measures = aslist(exps["aggregation"]) if "aggregation" in exps else ["macro", "micro"]
+    stat_functions = aslist(exps["stat_funcs"]) if "stat_funcs" in exps else ["mean"]
+    run_types = aslist(exps["run_types"]) if "run_types" in exps else ["run"]
 
     # folder to run experiments in
-    run_dir = conf["experiments"]["run_folder"]
+    run_dir = exps["run_folder"]
     # folder where run scripts are
-    sources_dir = conf["experiments"]["sources_dir"]
+    sources_dir = exps["sources_dir"]
+
+    configs, run_ids = make_configs(conf, run_dir, sources_dir)
+
     # virtualenv folder
     venv_dir = conf["experiments"]["venv"] if "venv" in conf["experiments"] else None
     # results csv file
     results_file = conf["experiments"]["results_file"]
 
-    configs, run_ids = make_configs(conf)
 
     results = {}
 
@@ -113,11 +133,11 @@ def main():
     # prelim experiments
     for conf_index, (conf, run_id) in enumerate(zip(configs, run_ids)):
         print("Running experimens for configuration {}/{}: {}".format(conf_index+1, len(configs), run_id))
-        experiment_dir = join(run_dir, run_id)
+        experiment_dir = conf["folders"]["run"]
         completed_file = join(experiment_dir, "completed")
         error_file = join(experiment_dir, "error")
         # results to run folders, if not specified otherwise
-        respath = conf["folders"]["results"]
+        respath = join(experiment_dir, "results")
         if not isabs(respath):
             conf["folders"]["results"] = join(experiment_dir, respath)
 
@@ -142,8 +162,8 @@ def main():
             if exists(error_file):
                 exit(1)
         # read experiment results
-        res_file = join(experiment_dir,"results", run_id, "results.pickle")
-        with open(res_file, "rb") as f:
+        exp_res_file = join(experiment_dir,"results", "results.pickle")
+        with open(exp_res_file, "rb") as f:
             res_data = pickle.load(f)
         results[run_id] = res_data
 
@@ -154,10 +174,20 @@ def main():
         for m in eval_measures:
             for run in run_types:
                 for ag in aggr_measures:
-                    header = "{}.{}.{}".format(run, m, ag)
-                    val = results[run_id].loc[m][run][ag][-1]
-                    print_vals[run_id][header] = val
-    print(pd.DataFrame.from_dict(print_vals, orient='index'))
+                    if ag not in results[run_id].loc[m][run]:
+                        print("Run {}: Aggregation {} incompatible with measure {}.".format(run_id, ag, m))
+                        continue
+                    for stat in stat_functions:
+                        header = "{}.{}.{}.{}".format(run[:3], m[:3], ag[:3], stat)
+                        if stat == "var":
+                            val = round(results[run_id].loc[m][run][ag]["var"], decimals=4)
+                        elif stat == "mean":
+                            val = round(results[run_id].loc[m][run][ag]["mean"], decimals=4)
+                        elif stat == "std":
+                            val = round(results[run_id].loc[m][run][ag]["std"], decimals=4)
+                        print_vals[run_id][header] = val
+    df = pd.DataFrame.from_dict(print_vals, orient='index')
+    print(df.to_string())
 
 if __name__ == "__main__":
     main()
