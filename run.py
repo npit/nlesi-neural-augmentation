@@ -2,6 +2,7 @@ from os.path import join, exists, isabs
 from os import makedirs
 import subprocess
 import yaml
+import time
 import pickle
 import pandas as pd
 from functools import reduce
@@ -13,6 +14,9 @@ from numpy import round
 Script to reproduce semantic neural augmentation experiments
 """
 
+# datetime for timestamps
+def datetime_str():
+    return time.strftime("%d%m%y_%H%M%S")
 
 def aslist(x):
     if type(x) != list:
@@ -118,7 +122,8 @@ def main():
     # virtualenv folder
     venv_dir = conf["experiments"]["venv"] if "venv" in conf["experiments"] else None
     # results csv file
-    results_file = conf["experiments"]["results_file"]
+    # results_file = conf["experiments"]["results_file"]
+    results_file = join(run_dir, "run_results.csv")
 
 
     results = {}
@@ -157,9 +162,8 @@ def main():
             with open(script_path, "w") as f:
                 if venv_dir:
                     f.write("source \"{}/bin/activate\"".format(venv_dir))
-
                 f.write("cd \"{}\"\n".format(sources_dir))
-                f.write("python3 \"{}\" --config_file \"{}\" && touch \"{}\" &&  exit 0\n".format(join(sources_dir, "main.py"), conf_path, completed_file))
+                f.write("python3 \"{}\" --config_file \"{}\" && touch \"{}\" && exit 0\n".format(join(sources_dir, "main.py"), conf_path, completed_file))
                 f.write("touch '{}' && exit 1\n".format(error_file))
             subprocess.run(["/usr/bin/env", "bash", script_path])
             if exists(error_file):
@@ -191,6 +195,10 @@ def main():
                         print_vals[run_id][header] = val
     df = pd.DataFrame.from_dict(print_vals, orient='index')
     print(df.to_string())
+    print("Writing these results to file {}".format(results_file))
+    with open(results_file, "w") as f:
+        f.write(df.to_string())
+        f.write("\n")
 
 if __name__ == "__main__":
     main()
