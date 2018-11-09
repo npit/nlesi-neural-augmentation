@@ -9,12 +9,44 @@ from functools import reduce
 import itertools
 from copy import deepcopy
 from numpy import round
+import smtplib
+import logging
+import os
 
 """
 Script to reproduce semantic neural augmentation experiments
 """
+exlogger=logging.getLogger("experiments")
+def info(msg):
+	exlogger.info(msg)
+def error(msg):
+	exlogger.error(msg)
+	exit(1)
 
-# datetime for timestamps
+def sendmail(mail, passw, msg, title="nle"):
+    # email me
+    TO = mail
+    SUBJECT = title
+    TEXT = msg
+    # Gmail Sign In
+    gmail_sender = mail
+    recipient= mail
+    gmail_passwd = passw
+
+    server = smtplib.SMTP('smtp.gmail.com', 587)
+    server.ehlo()
+    server.starttls()
+    server.login(gmail_sender, gmail_passwd)
+
+    BODY = '\r\n'.join(['To: %s' % TO, 'From: %s' % gmail_sender, 'Subject: %s' % SUBJECT, '', TEXT])
+    try:
+        server.sendmail(gmail_sender, [TO], BODY)
+        info('Email sent to [%s]' % recipient)
+    except Exception as x:
+        info('Error sending mail to [%s]' % recipient)
+        error(x)
+
+
 def datetime_str():
     return time.strftime("%d%m%y_%H%M%S")
 
@@ -100,6 +132,8 @@ def main():
 
     # config file
     config_file = "config.yml"
+    email="pittarasnikif@gmail.com"
+    passw=open("mail").read()
 
     ############################################################
 
@@ -125,22 +159,41 @@ def main():
     # results_file = conf["experiments"]["results_file"]
     results_file = join(run_dir, "run_results.csv")
 
+    # logging
+	# file handler
+    formatter = logging.Formatter(fmt='%(asctime)s - %(levelname)s - %(module)s - %(message)s')
+
+    logfile = os.path.join(run_dir, "experiments_{}.log".format(datetime_str()))
+
+    chandler = logging.StreamHandler()
+    chandler.setFormatter(formatter)
+    chandler.setLevel(logging.DEBUG)
+    exlogger.addHandler(chandler)
+
+    fhandler = logging.FileHandler(logfile)
+    fhandler.setLevel(logging.DEBUG)
+    fhandler.setFormatter(formatter)
+    exlogger.addHandler(fhandler)
+    exlogger.setLevel(logging.DEBUG)
+
+
+
+
 
     results = {}
 
     # dir checks
     if venv_dir and not exists(venv_dir):
-        print("Virtualenv dir {} not found".format(venv_dir))
-        exit()
+        error("Virtualenv dir {} not found".format(venv_dir))
     if not exists(run_dir):
-        print("Run dir {} not found, creating.".format(run_dir))
+        info("Run dir {} not found, creating.".format(run_dir))
         makedirs(run_dir)
 
     #################################################################################
 
     # prelim experiments
     for conf_index, (conf, run_id) in enumerate(zip(configs, run_ids)):
-        print("Running experimens for configuration {}/{}: {}".format(conf_index+1, len(configs), run_id))
+        info("Running experimens for configuration {}/{}: {}".format(conf_index+1, len(configs), run_id))
         experiment_dir = conf["folders"]["run"]
         completed_file = join(experiment_dir, "completed")
         error_file = join(experiment_dir, "error")
@@ -150,7 +203,7 @@ def main():
             conf["folders"]["results"] = join(experiment_dir, respath)
 
         if exists(completed_file):
-            print("Skipping completed experiment {}".format(run_id))
+            info("Skipping completed experiment {}".format(run_id))
         else:
             makedirs(experiment_dir, exist_ok=True)
 
@@ -167,6 +220,8 @@ def main():
                 f.write("touch '{}' && exit 1\n".format(error_file))
             subprocess.run(["/usr/bin/env", "bash", script_path])
             if exists(error_file):
+                info("An error has occurred in the run, exiting.")
+                sendmail(email,passw,"an error occurred")
                 exit(1)
         # read experiment results
         exp_res_file = join(experiment_dir,"results", "results.pickle")
@@ -182,7 +237,7 @@ def main():
             for run in run_types:
                 for ag in aggr_measures:
                     if ag not in results[run_id].loc[m][run]:
-                        print("Run {}: Aggregation {} incompatible with measure {}.".format(run_id, ag, m))
+                        info("Run {}: Aggregation {} incompatible with measure {}.".format(run_id, ag, m))
                         continue
                     for stat in stat_functions:
                         header = "{}.{}.{}.{}".format(run[:3], m[:3], ag[:3], stat)
@@ -195,10 +250,12 @@ def main():
                         print_vals[run_id][header] = val
     df = pd.DataFrame.from_dict(print_vals, orient='index')
     print(df.to_string())
-    print("Writing these results to file {}".format(results_file))
+    info("Writing these results to file {}".format(results_file))
     with open(results_file, "w") as f:
         f.write(df.to_string())
         f.write("\n")
+
+    sendmail(email,passw,"run complete.")
 
 if __name__ == "__main__":
     main()
