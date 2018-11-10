@@ -164,6 +164,7 @@ def main():
     formatter = logging.Formatter(fmt='%(asctime)s - %(levelname)s - %(module)s - %(message)s')
 
     logfile = os.path.join(run_dir, "experiments_{}.log".format(datetime_str()))
+    logfile_error = open(os.path.join(run_dir, "experiments_{}.error".format(datetime_str())), "w")
 
     chandler = logging.StreamHandler()
     chandler.setFormatter(formatter)
@@ -218,10 +219,11 @@ def main():
                 f.write("cd \"{}\"\n".format(sources_dir))
                 f.write("python3 \"{}\" --config_file \"{}\" && touch \"{}\" && exit 0\n".format(join(sources_dir, "main.py"), conf_path, completed_file))
                 f.write("touch '{}' && exit 1\n".format(error_file))
-            subprocess.run(["/usr/bin/env", "bash", script_path])
+            subprocess.run(["/usr/bin/env", "bash", script_path], stderr=logfile_error)
             if exists(error_file):
                 info("An error has occurred in the run, exiting.")
                 sendmail(email,passw,"an error occurred")
+                close(logfile_error)
                 exit(1)
         # read experiment results
         exp_res_file = join(experiment_dir,"results", "results.pickle")
