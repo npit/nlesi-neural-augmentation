@@ -133,7 +133,7 @@ def main():
     # config file
     config_file = "config.yml"
     email="pittarasnikif@gmail.com"
-    passw=open("mail").read()
+    passw_path="./mailpass"
 
     ############################################################
 
@@ -159,29 +159,12 @@ def main():
     # results_file = conf["experiments"]["results_file"]
     results_file = join(run_dir, "run_results.csv")
 
-    # logging
-	# file handler
-    formatter = logging.Formatter(fmt='%(asctime)s - %(levelname)s - %(module)s - %(message)s')
+    # mail
+    do_mail = exps["do_mail"]
+    if do_mail:
+        with open(passw_path) as f:
+            passw=f.read()
 
-    logfile = os.path.join(run_dir, "experiments_{}.log".format(datetime_str()))
-    logfile_error = open(os.path.join(run_dir, "experiments_{}.error".format(datetime_str())), "w")
-
-    chandler = logging.StreamHandler()
-    chandler.setFormatter(formatter)
-    chandler.setLevel(logging.DEBUG)
-    exlogger.addHandler(chandler)
-
-    fhandler = logging.FileHandler(logfile)
-    fhandler.setLevel(logging.DEBUG)
-    fhandler.setFormatter(formatter)
-    exlogger.addHandler(fhandler)
-    exlogger.setLevel(logging.DEBUG)
-
-
-
-
-
-    results = {}
 
     # dir checks
     if venv_dir and not exists(venv_dir):
@@ -189,6 +172,25 @@ def main():
     if not exists(run_dir):
         info("Run dir {} not found, creating.".format(run_dir))
         makedirs(run_dir)
+
+    # logging
+    level = logging._nameToLevel[conf["log_level"].upper()]
+    formatter = logging.Formatter(fmt='%(asctime)s - %(levelname)s - %(module)s - %(message)s')
+
+    logfile = os.path.join(run_dir, "experiments_{}.log".format(datetime_str()))
+
+    chandler = logging.StreamHandler()
+    chandler.setFormatter(formatter)
+    chandler.setLevel(level)
+    exlogger.addHandler(chandler)
+
+    fhandler = logging.FileHandler(logfile)
+    fhandler.setLevel(level)
+    fhandler.setFormatter(formatter)
+    exlogger.addHandler(fhandler)
+    exlogger.setLevel(logging.DEBUG)
+
+    results = {}
 
     #################################################################################
 
@@ -219,11 +221,13 @@ def main():
                 f.write("cd \"{}\"\n".format(sources_dir))
                 f.write("python3 \"{}\" --config_file \"{}\" && touch \"{}\" && exit 0\n".format(join(sources_dir, "main.py"), conf_path, completed_file))
                 f.write("touch '{}' && exit 1\n".format(error_file))
-            subprocess.run(["/usr/bin/env", "bash", script_path], stderr=logfile_error)
+
+            subprocess.run(["/usr/bin/env", "bash", script_path])
             if exists(error_file):
+                print("An error has occurred in the run, exiting.")
                 info("An error has occurred in the run, exiting.")
-                sendmail(email,passw,"an error occurred")
-                close(logfile_error)
+                if do_mail:
+                    sendmail(email,passw,"an error occurred")
                 exit(1)
         # read experiment results
         exp_res_file = join(experiment_dir,"results", "results.pickle")
@@ -257,7 +261,8 @@ def main():
         f.write(df.to_string())
         f.write("\n")
 
-    sendmail(email,passw,"run complete.")
+    if do_mail:
+        sendmail(email,passw,"run complete.")
 
 if __name__ == "__main__":
     main()

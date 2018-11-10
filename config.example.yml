@@ -7,13 +7,13 @@ params:
 
 experiments:
   run_folder: /path/to/runs
-  results_file: "results_network_prelim.csv"
   # evaluation measures evaluation:
   measures: [f1-score]
   aggregation: [macro, micro]
   run_types: [run, majority]
   sources_dir:  /path/to/sources
   virtualenv:
+  do_mail: False
 
 dataset:
   name: 20newsgroups
