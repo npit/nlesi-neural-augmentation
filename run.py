@@ -1,5 +1,5 @@
-from os.path import join, exists, isabs
-from os import makedirs
+from os.path import join, exists, isabs, basename, splitext
+from os import makedirs, remove
 import subprocess
 import yaml
 import time
@@ -93,7 +93,12 @@ def make_configs(base_config, run_dir, sources_dir):
         name_components = []
         for v, value in enumerate(combo):
             lconf = conf
-            name_components.append(str(value))
+            # make sure it's directory-friendly
+            if type(value) == list:
+                val = "-".join(list(map(str, value)))
+                name_components.append(val)
+            else:
+                name_components.append(basename(splitext(str(value))[0]))
             key_chain = names[v]
             for key in key_chain[:-1]:
                 if key not in lconf:
@@ -102,6 +107,7 @@ def make_configs(base_config, run_dir, sources_dir):
             lconf[key_chain[-1]] = value
         # dirs
         run_id = "_".join(name_components)
+        print("Built run id:", run_id)
         conf["folders"]["run"] = join(run_dir, run_id)
         if isabs(base_serialization_folder):
             conf["folders"]["serialization"] = base_serialization_folder
@@ -208,6 +214,8 @@ def main():
         if exists(completed_file):
             info("Skipping completed experiment {}".format(run_id))
         else:
+            if exists(error_file):
+                os.remove(error_file)
             makedirs(experiment_dir, exist_ok=True)
 
             conf_path = join(experiment_dir, "config.yml")
