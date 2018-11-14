@@ -12,6 +12,7 @@ from numpy import round
 import smtplib
 import logging
 import os
+import getpass
 
 """
 Script to reproduce semantic neural augmentation experiments
@@ -139,7 +140,7 @@ def main():
     # config file
     config_file = "config.yml"
     email="pittarasnikif@gmail.com"
-    passw_path="./mailpass"
+    passw=None
 
     ############################################################
 
@@ -168,8 +169,7 @@ def main():
     # mail
     do_mail = exps["do_mail"]
     if do_mail:
-        with open(passw_path) as f:
-            passw=f.read()
+        passw=getpass.getpass()
 
 
     # dir checks
