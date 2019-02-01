@@ -1,5 +1,5 @@
 from os.path import join, exists, isabs, basename, splitext
-from os import makedirs, remove
+from os import makedirs
 import subprocess
 import yaml
 import time
@@ -14,15 +14,20 @@ import logging
 import os
 import getpass
 
+"""Script to reproduce semantic neural augmentation experiments
 """
-Script to reproduce semantic neural augmentation experiments
-"""
-exlogger=logging.getLogger("experiments")
+
+exlogger = logging.getLogger("experiments")
+
+
 def info(msg):
-	exlogger.info(msg)
+    exlogger.info(msg)
+
+
 def error(msg):
-	exlogger.error(msg)
-	exit(1)
+    exlogger.error(msg)
+    exit(1)
+
 
 def sendmail(mail, passw, msg, title="nle"):
     # email me
@@ -31,7 +36,7 @@ def sendmail(mail, passw, msg, title="nle"):
     TEXT = msg
     # Gmail Sign In
     gmail_sender = mail
-    recipient= mail
+    recipient = mail
     gmail_passwd = passw
 
     server = smtplib.SMTP('smtp.gmail.com', 587)
@@ -51,6 +56,7 @@ def sendmail(mail, passw, msg, title="nle"):
 def datetime_str():
     return time.strftime("%d%m%y_%H%M%S")
 
+
 def aslist(x):
     if type(x) != list:
         x = [x]
@@ -66,7 +72,7 @@ def traverse_dict(ddict, key, prev_keys):
         return res
     if type(ddict[key]) == dict:
         prev_keys.append(key)
-        res =  traverse_dict(ddict[key], None, prev_keys)
+        res = traverse_dict(ddict[key], None, prev_keys)
     else:
         val = ddict[key]
         if type(val) != list:
@@ -84,10 +90,10 @@ def make_configs(base_config, run_dir, sources_dir):
         seqs = traverse_dict(params, val, [])
         vars.extend(seqs)
     configs, run_ids = [], []
-    vars = sorted(vars, key = lambda x : str(x[1]))
+    vars = sorted(vars, key=lambda x: str(x[1]))
 
     values = [v[0] for v in vars]
-    names =  [v[1] for v in vars]
+    names = [v[1] for v in vars]
 
     for combo in itertools.product(*values):
         conf = deepcopy(base_config)
@@ -122,6 +128,7 @@ def make_configs(base_config, run_dir, sources_dir):
         run_ids.append(run_id)
     return configs, run_ids
 
+
 # make a run id name out of a list of nested dict keys and a configuration dict
 def make_run_ids(keychains, confs):
     names = []
@@ -129,7 +136,7 @@ def make_run_ids(keychains, confs):
         name_components = []
         for keychain in keychains:
             name_components.append(reduce(dict.get, keychain, conf))
-        names.append("_".join(map(str,name_components)))
+        names.append("_".join(map(str, name_components)))
     return names
 
 
@@ -139,8 +146,8 @@ def main():
 
     # config file
     config_file = "config.yml"
-    email="pittarasnikif@gmail.com"
-    passw=None
+    email = ""
+    passw = None
 
     ############################################################
 
@@ -150,7 +157,7 @@ def main():
     exps = conf["experiments"]
     eval_measures = aslist(exps["measures"]) if "measures" in exps else ["f1-score", "accuracy"]
     aggr_measures = aslist(exps["aggregation"]) if "aggregation" in exps else ["macro", "micro"]
-    stat_functions = aslist(exps["stat_funcs"]) if "stat_funcs" in exps else ["mean"]
+    stat_functions = aslist(exps["stats"]) if "stats" in exps else ["mean"]
     run_types = aslist(exps["run_types"]) if "run_types" in exps else ["run"]
 
     # folder to run experiments in
@@ -169,8 +176,7 @@ def main():
     # mail
     do_mail = exps["do_mail"]
     if do_mail:
-        passw=getpass.getpass()
-
+        passw = getpass.getpass()
 
     # dir checks
     if venv_dir and not exists(venv_dir):
@@ -202,7 +208,7 @@ def main():
 
     # prelim experiments
     for conf_index, (conf, run_id) in enumerate(zip(configs, run_ids)):
-        info("Running experimens for configuration {}/{}: {}".format(conf_index+1, len(configs), run_id))
+        info("Running experimens for configuration {}/{}: {}".format(conf_index + 1, len(configs), run_id))
         experiment_dir = conf["folders"]["run"]
         completed_file = join(experiment_dir, "completed")
         error_file = join(experiment_dir, "error")
@@ -235,25 +241,26 @@ def main():
                 print("An error has occurred in the run, exiting.")
                 info("An error has occurred in the run, exiting.")
                 if do_mail:
-                    sendmail(email,passw,"an error occurred")
+                    sendmail(email, passw, "an error occurred")
                 exit(1)
         # read experiment results
-        exp_res_file = join(experiment_dir,"results", "results.pickle")
+        exp_res_file = join(experiment_dir, "results", "results.pickle")
         with open(exp_res_file, "rb") as f:
             res_data = pickle.load(f)
         results[run_id] = res_data
 
+    total_results = {}
     # show results
-    print_vals = {}
-    for run_id in results:
-        print_vals[run_id] = {}
-        for m in eval_measures:
-            for run in run_types:
-                for ag in aggr_measures:
-                    if ag not in results[run_id].loc[m][run]:
-                        info("Run {}: Aggregation {} incompatible with measure {}.".format(run_id, ag, m))
-                        continue
-                    for stat in stat_functions:
+    for stat in stat_functions:
+        print("Results regarding {} statistic:".format(stat))
+        print_vals = {}
+        for run_id in results:
+            print_vals[run_id] = {}
+            for m in eval_measures:
+                for run in run_types:
+                    for ag in aggr_measures:
+                        if ag not in results[run_id].loc[m][run]:
+                            continue
                         header = "{}.{}.{}.{}".format(run[:3], m[:3], ag[:3], stat)
                         if stat == "var":
                             val = round(results[run_id].loc[m][run][ag]["var"], decimals=4)
@@ -262,15 +269,18 @@ def main():
                         elif stat == "std":
                             val = round(results[run_id].loc[m][run][ag]["std"], decimals=4)
                         print_vals[run_id][header] = val
-    df = pd.DataFrame.from_dict(print_vals, orient='index')
-    print(df.to_string())
+        # print'em
+        df = pd.DataFrame.from_dict(print_vals, orient='index')
+        pd.set_option("max_colwidth", max(map(len, results.keys())))
+        print(df.to_string())
+        total_results[stat] = print_vals
     info("Writing these results to file {}".format(results_file))
-    with open(results_file, "w") as f:
-        f.write(df.to_string())
-        f.write("\n")
+    total_df = pd.DataFrame.from_dict(total_results, orient='index')
+    total_df.to_csv(results_file)
 
     if do_mail:
-        sendmail(email,passw,"run complete.")
+        sendmail(email, passw, "run complete.")
+
 
 if __name__ == "__main__":
     main()
