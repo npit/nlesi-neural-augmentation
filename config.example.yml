@@ -1,10 +1,12 @@
+# variable parameters
 params:
   learner:
     hidden_dim: [128, 256, 512, 1024, 2048]
     layers: [1,2,3]
-    name: lstm
+    name: mlp
     sequence_length: 10
 
+# experiment parameters
 experiments:
   run_folder: /path/to/runs
   # evaluation measures evaluation:
@@ -18,7 +20,7 @@ experiments:
 dataset:
   name: 20newsgroups
 
-embedding:
+representation:
   aggregation: [pad, 10, first]
   dimension: 50
   name: glove
