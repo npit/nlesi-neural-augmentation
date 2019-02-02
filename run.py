@@ -278,9 +278,9 @@ def main():
     total_df = pd.DataFrame.from_dict(total_results, orient='index')
     total_df.to_csv(results_file)
 
+    # [info(msg) for msg in messages]
     if do_mail:
         sendmail(email, passw, "run complete.")
-
 
 if __name__ == "__main__":
     main()
